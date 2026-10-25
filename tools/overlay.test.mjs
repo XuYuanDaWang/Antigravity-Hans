@@ -188,3 +188,90 @@ test('lint catches untranslated words and permission polarity reversals', () => 
     assert.match(denied.stdout, /语义反转/);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('issue 12 remaining settings labels and descriptions are localized', () => {
+  for (const [input, expected] of [
+    ['Manage project folders, agent settings, and permissions.', '管理项目文件夹、智能体设置和权限。'],
+    ['Danger Zone', '危险操作'],
+    ['Gemini 4 Argon Weekly Limit', 'Gemini 4 Argon 周额度'],
+    ['Check availability, schedule events, and RSVP.', '查看空闲时间、安排活动并回复活动邀请。'],
+    ['Read, draft, and edit docs.', '阅读、起草和编辑文档。'],
+    ['Search, upload, download, and share files.', '搜索、上传、下载和共享文件。'],
+    ['Read, write, and format spreadsheets.', '读取、写入电子表格并设置格式。'],
+    ['Read, edit, and export presentations.', '阅读、编辑和导出演示文稿。'],
+  ]) {
+    assert.equal(translate(input), expected);
+    assert.equal(translate(expected), expected);
+  }
+  for (const name of ['Google Calendar', 'Google Docs', 'Google Drive', 'Google Sheets', 'Google Slides', 'Gemini 4 Argon']) {
+    assert.equal(translate(name), name);
+  }
+  assert.equal(translate('Gemini 99 Future Weekly Limit'), 'Gemini 99 Future Weekly Limit');
+});
+
+test('project deletion preserves arbitrary names and counts through repeated passes', () => {
+  for (const name of ['明明研究中心', 'Last 7 days', '10 files', 'Inherit Global', 'Danger Zone', "a $& $$ $` $'", 'a including 2 active conversations.', 'a\nb', 'a“b”']) {
+    for (const [count, noun] of [['0', 'conversations'], ['1', 'conversation'], ['3', 'conversations'], ['1000', 'conversations']]) {
+      const input = ` Permanently delete ${name} including ${count} active ${noun}. `;
+      const output = ` 永久删除项目“${name}”及其中的 ${count} 个活跃对话。 `;
+      assert.equal(translate(input), output);
+      assert.equal(translate(output), output);
+    }
+  }
+  assert.equal(translate('Permanently delete Example including unknown active conversations.'), 'Permanently delete Example including unknown active conversations.');
+});
+
+function projectPermissionFixture(parts, label = 'Global Permissions', skipped = false) {
+  context.Node = { ELEMENT_NODE: 1, TEXT_NODE: 3 };
+  const link = { nodeType: 1, textContent: label, href: '/settings/permissions', onclick() {} };
+  const more = { nodeType: 1, textContent: ' Learn more.', href: '/docs/permissions' };
+  const nodes = parts.map(value => value === null ? link : { nodeType: 3, nodeValue: value });
+  nodes.push(more);
+  return {
+    nodeType: 1, childNodes: nodes, link, more,
+    get textContent() { return nodes.map(n => n.nodeType === 3 ? n.nodeValue : n.textContent).join(''); },
+    closest(selector) { return skipped && selector.includes('script, style') ? this : null; },
+    getAttribute() { return null; }, setAttribute() {},
+  };
+}
+
+test('project permissions preserve link identity, destinations and handlers', () => {
+  for (const label of ['Global Permissions', '全局权限']) {
+    for (const parts of [
+      ['Also includes ', null, ' when working in this project.'],
+      ['Also includes ', null, ' ', 'when working ', 'in this project', '.'],
+    ]) {
+      const el = projectPermissionFixture(parts, label);
+      const originalNodes = [...el.childNodes];
+      const handler = el.link.onclick;
+      context.translateElementForTest(el);
+      assert.equal(el.textContent, `在此项目中工作时，还包括${label}。 Learn more.`);
+      assert.deepEqual(el.childNodes, originalNodes);
+      assert.equal(el.link.onclick, handler);
+      assert.equal(el.link.href, '/settings/permissions');
+      assert.equal(el.more.href, '/docs/permissions');
+      context.translateElementForTest(el);
+      assert.equal(el.textContent, `在此项目中工作时，还包括${label}。 Learn more.`);
+    }
+  }
+});
+
+test('unknown project permission layouts and skipped content remain untouched', () => {
+  for (const el of [
+    projectPermissionFixture(['Also includes ', null, ' when working in this workspace.']),
+    projectPermissionFixture(['Also includes ', null, ' when working in this project.'], 'Custom Permissions'),
+    projectPermissionFixture(['Also includes ', null, ' when working in this project.'], 'Global Permissions', true),
+  ]) {
+    const original = el.textContent;
+    context.translateElementForTest(el);
+    assert.equal(el.textContent, original);
+  }
+  for (const selectorFragment of ['script, style', 'contenteditable', 'user-input-step']) {
+    const text = { nodeType: 3, nodeValue: 'Danger Zone', parentElement: {
+      closest(selector) { return selector.includes(selectorFragment) ? this : null; },
+    } };
+    context.translateNodeForTest(text);
+    assert.equal(text.nodeValue, 'Danger Zone');
+    assert.equal(text.__zh_patched, undefined);
+  }
+});

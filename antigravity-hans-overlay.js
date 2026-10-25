@@ -211,6 +211,7 @@
     ['Core tools and knowledge required to develop for Android', '开发 Android 应用所需的核心工具与知识'],
     ['Type / and select plan to have the agent generate a plan', '输入 / 并选择 plan 让智能体生成计划'],
     ['Scan the code to open this device in Remote Control, or ', '扫描二维码以在远程控制中打开此设备，或 '],
+    ['Manage project folders, agent settings, and permissions.', '管理项目文件夹、智能体设置和权限。'],
     ['This subagent was killed and can no longer be messaged.', '此子智能体已终止，无法再向其发送消息。'],
     ['This project overrides your global permission settings.', '此项目覆盖了您的全局权限设置。'],
     ['Include default customizations, such as default skills.', '包含默认自定义项，例如默认技能。'],
@@ -278,6 +279,7 @@
     ['Configure allowed and denied URLs for reading.', '配置允许和拒绝读取的 URL。'],
     ['Continue conversation in the current workspace', '在当前工作区继续对话'],
     ['Automations do not inherit Global Permissions.', '自动化任务不继承全局权限。'],
+    ['Check availability, schedule events, and RSVP.', '查看空闲时间、安排活动并回复活动邀请。'],
     ['Any error messages seen when trying to log in', '尝试登录时看到的任何错误信息'],
     ['This setting is managed by your organization.', '此设置由您所在的组织管理。'],
     ['This option is disabled by your organization.', '此选项已被您所在的组织禁用。'],
@@ -305,6 +307,7 @@
     ['Confirmation required to execute this step', '执行此步骤需要确认'],
     ['Folder no longer exists or is unavailable.', '文件夹不再存在或不可用。'],
     ['Show suggestions when typing in the editor', '在编辑器中输入时显示建议'],
+    ['Search, upload, download, and share files.', '搜索、上传、下载和共享文件。'],
     ['Credential expired. Click to refresh TDAT', '凭据已过期。点击刷新 TDAT'],
     ['Allow Tab to access .gitignore exclusions', 'Tab 键访问 .gitignore 排除文件'],
     ['Ask anything, @ to mention, / for actions', '想问什么都可以，@ 引用，/ 执行动作'],
@@ -331,6 +334,8 @@
     ['Manage your notification preferences.', '管理您的通知偏好设置。'],
     ['Outside of folders file access policy', '文件夹外访问策略'],
     ['Select where to open the conversation', '选择在哪里打开对话'],
+    ['Read, write, and format spreadsheets.', '读取、写入电子表格并设置格式。'],
+    ['Read, edit, and export presentations.', '阅读、编辑和导出演示文稿。'],
     ['Allow executing actions on this URL?', '允许在此 URL 上执行操作？'],
     ['AI Credits Used to Generate Response', '已使用 AI 积分生成回复'],
     ['Scan the code to open this device in', '扫描二维码以在远程控制中打开此设备'],
@@ -450,6 +455,8 @@
     ['Generate CitC Workspace VCS', '生成 CitC 工作区 VCS'],
     ['New Conversation in Project', '在项目中新建对话'],
     ['Paths the agent can modify.', '智能体可修改的路径。'],
+    ['Gemini 4 Argon Weekly Limit', 'Gemini 4 Argon 周额度'],
+    ['Read, draft, and edit docs.', '阅读、起草和编辑文档。'],
     ['Allow using this MCP tool?', '允许使用此 MCP 工具？'],
     ['No automations configured.', '尚未配置任何自动化。'],
     ['Open with External Browser', '使用外部浏览器打开'],
@@ -1055,6 +1062,7 @@
     ['Device Name', '设备名称'],
     ['App version', '应用版本'],
     ['Modified in', '已在'],
+    ['Danger Zone', '危险操作'],
     ['Loading...', '正在加载...'],
     ['Yes, allow', '是，允许'],
     ['UI Actions', '界面操作'],
@@ -1655,6 +1663,11 @@
   // 核心翻译流水线：精准完全匹配优先 -> 动态进度栏 -> 长句及复合短语子串 -> 动态变量规则
   function translate(value) {
     if (!value || !/[A-Za-z]/.test(value)) return value;
+    // 项目名称属于数据；完整删除模板须先于通用词条处理。
+    // 观察器重处理译文时，也不能改写名称中的英文。
+    if (/^永久删除项目“[\s\S]*”及其中的 \d+ 个活跃对话。$/.test(value.trim())) return value;
+    const deletion = value.trim().match(/^Permanently delete ([\s\S]+) including (\d+) active conversations?\.$/);
+    if (deletion) return value.replace(value.trim(), () => `永久删除项目“${deletion[1]}”及其中的 ${deletion[2]} 个活跃对话。`);
     const permission = translatePermission(value);
     if (permission !== null) return permission;
     const trimmed = value.trim();
@@ -1814,6 +1827,22 @@
   // React 将该提示拆成多个文本节点，按中文语序重排各节点并保留链接。
   function translateComposedElement(element) {
     const text = (element.textContent || '').replace(/\s+/g, ' ').trim();
+    // 项目说明也会被链接拆分；验证已知结构后只修改直接文本节点。
+    if (/^Also includes (?:Global Permissions|全局权限) when working in this project\.(?: (?:Learn more\.|了解更多[。.]?))?$/.test(text)) {
+      const children = Array.from(element.childNodes);
+      const linkIndex = children.findIndex(child => child.nodeType === Node.ELEMENT_NODE &&
+        /^(?:Global Permissions|全局权限)$/.test((child.textContent || '').trim()));
+      const before = children.slice(0, linkIndex).filter(child => child.nodeType === Node.TEXT_NODE);
+      const after = children.slice(linkIndex + 1).filter(child => child.nodeType === Node.TEXT_NODE);
+      if (linkIndex < 0 || before.length === 0 || after.length === 0 ||
+          before.map(child => child.nodeValue).join('').trim() !== 'Also includes' ||
+          after.map(child => child.nodeValue).join('').replace(/\s+/g, ' ').trim() !== 'when working in this project.') return false;
+      for (const child of [...before, ...after]) {
+        child.nodeValue = child === before[0] ? '在此项目中工作时，还包括' : child === after[after.length - 1] ? '。' : '';
+        child.__zh_patched = true;
+      }
+      return true;
+    }
     if (!/^Also includes (?:Global Permissions|全局权限) when working in these conversations\./.test(text)) return false;
     const updates = new Map([
       ['Also includes', '在这些对话中工作时，还包括'],
