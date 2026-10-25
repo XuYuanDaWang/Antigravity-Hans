@@ -19,6 +19,14 @@ const errors = [];
 const warnings = [];
 const seen = new Set();
 
+// 词库为单一长句优先列表：源文长度必须单调不增，避免再次出现分区或随意追加
+for (let i = 1; i < entries.length; i++) {
+  if (String(entries[i][0]).length > String(entries[i - 1][0]).length) {
+    errors.push('词库未按源文长度倒序: ' + JSON.stringify(String(entries[i][0]).slice(0, 40)));
+    break;
+  }
+}
+
 // 译文里允许保留的英文：产品名、协议名、命令名、路径名
 const ALLOWED_LATIN = new Set([
   'agy', 'android', 'antigravity', 'antigravity-browser-profile', 'blaze', 'browser', 'cascade',

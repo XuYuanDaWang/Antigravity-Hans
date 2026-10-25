@@ -61,7 +61,7 @@ func findCDPPort(cfg AppConfig) (int, bool) {
 		}
 	}
 	var additional []int
-	// 2.23.0 enables a random CDP port by default; reuse only listeners owned
+	// 2.26.0 enables a random CDP port by default; reuse only listeners owned
 	// by the normal app, so attaching does not require restarting its windows.
 	if cfg.Name == AppNormal.Name {
 		for port := range owners {

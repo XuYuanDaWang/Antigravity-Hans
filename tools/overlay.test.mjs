@@ -74,6 +74,37 @@ test('2.23.0 normal app controls and safety policies are localized', () => {
   ]) assert.equal(translate(input), expected);
 });
 
+test('2.26.0 normal app settings and popovers are localized', () => {
+  for (const [input, expected] of [
+    ['Give Feedback', '提供反馈'],
+    ['Open Editor Settings', '打开编辑器设置'],
+    ['Inherit Global', '继承全局设置'],
+    ['Strong', '严格'],
+    ['Volume', '音量'],
+    ['Notice', '提示'],
+    ['Unavailable', '不可用'],
+    ['View Usage', '查看用量'],
+    ['View plans', '查看套餐'],
+    ['Use Global Settings', '使用全局设置'],
+    ['Search Projects', '搜索项目'],
+    ['Other Customizations', '其他自定义项'],
+    ['tokens (', 'Token ('],
+    ['Inherits your Global Permissions when working in these conversations.', '在这些对话中工作时继承您的全局权限。'],
+    ['Select project, current: No Project', '选择项目，当前：无项目'],
+    ['Agent permissions preset selector, current: Default', '智能体权限预设选择器，当前：默认'],
+    ['Select model, current: Gemini 3.8 Flash High', '选择模型，当前：Gemini 3.8 Flash 高'],
+    ['Rules: 540 tokens', '规则：540 个 Token'],
+    ['Skills: 170 tokens', '技能：170 个 Token'],
+    ['Delete plugin', '删除插件'],
+    ['Toggle Android CLI', '切换 Android CLI'],
+    ['Windows Subsystem for Linux', '适用于 Linux 的 Windows 子系统'],
+    ['5mo', '5 个月前'],
+    ['See 6 more', '查看其余 6 个'],
+    ['Install Google Docs', '安装 Google Docs'],
+    ['More actions for Android CLI', 'Android CLI 的更多操作'],
+  ]) assert.equal(translate(input), expected);
+});
+
 test('WSL provisioning translates status while preserving the distro name', () => {
   const name = 'Ubuntu 10 files';
   for (const input of [`Setting up WSL: ${name}`, `Installing into ${name}…`]) {
@@ -116,6 +147,29 @@ test('attribute mutations inside skipped code/user content are not translated', 
   assert.equal(attrs.get('aria-label'), '编辑权限目标');
 });
 
+test('split Also includes prompt is reordered while keeping links', () => {
+  context.Node = { ELEMENT_NODE: 1, TEXT_NODE: 3 };
+  const textA = { nodeType: 3, nodeValue: 'Also includes ' };
+  const link = { nodeType: 1 };
+  const textB = { nodeType: 3, nodeValue: ' ' };
+  const textC = { nodeType: 3, nodeValue: 'when working ' };
+  const textD = { nodeType: 3, nodeValue: 'in these conversations' };
+  const textE = { nodeType: 3, nodeValue: '.' };
+  const element = {
+    nodeType: 1,
+    textContent: 'Also includes Global Permissions when working in these conversations. Learn more.',
+    childNodes: [textA, link, textB, textC, textD, textE],
+    closest() { return null; },
+    getAttribute() { return null; },
+    setAttribute() {},
+  };
+  context.translateElementForTest(element);
+  assert.equal(textA.nodeValue, '在这些对话中工作时，还包括');
+  assert.equal(textC.nodeValue, '');
+  assert.equal(textD.nodeValue, '');
+  assert.equal(textE.nodeValue, '。');
+});
+
 test('lint catches untranslated words and permission polarity reversals', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-lexicon-test-'));
   try {
@@ -124,6 +178,10 @@ test('lint catches untranslated words and permission polarity reversals', () => 
     const result = spawnSync(process.execPath, [fileURLToPath(new URL('./lint-overlay.mjs', import.meta.url)), file], { encoding: 'utf8' });
     assert.equal(result.status, 0);
     assert.match(result.stdout, /译文残留英文 untranslated/);
+    fs.writeFileSync(file, "const phrases = new Map([\n    ['Short', '短'],\n    ['Longer label', '更长的标签'],\n  ]);\n");
+    const unsorted = spawnSync(process.execPath, [fileURLToPath(new URL('./lint-overlay.mjs', import.meta.url)), file], { encoding: 'utf8' });
+    assert.equal(unsorted.status, 1);
+    assert.match(unsorted.stdout, /未按源文长度倒序/);
     fs.writeFileSync(file, "const phrases = new Map([\n    ['Deny', '允许'],\n  ]);\n");
     const denied = spawnSync(process.execPath, [fileURLToPath(new URL('./lint-overlay.mjs', import.meta.url)), file], { encoding: 'utf8' });
     assert.equal(denied.status, 1);
