@@ -87,9 +87,25 @@ antigravity-hans --trust-external-overlay  # 显式信任同目录外部汉化�
 ```bash
 ./build.sh    # 交叉编译 macOS / Windows 2个平台到 dist/
 ```
+
+---
+
+## 参与贡献
+
+由于学业繁忙，更新可能不够及时，敬请谅解。欢迎提交 PR 补充词条、适配新版本或修复问题。
+
+新版本适配与词条维护流程见 [适配技能](.github/skills/antigravity-hans-adaptation/SKILL.md)，提交前请运行词库 lint 与回归测试。
+
 ---
 
 ## 致谢
 
-- 汉化词库参考：[antigravity-chinese](https://github.com/kdczyz/antigravity-chinese)
+- 感谢所有为本项目提交代码、文档、测试、Issue 的贡献者。
 
+<a href="https://github.com/yuexps/Antigravity-Hans/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=yuexps/Antigravity-Hans" alt="contributors" />
+</a>
+
+---
+
+- 汉化词库参考：[antigravity-chinese](https://github.com/kdczyz/antigravity-chinese)
