@@ -1,6 +1,6 @@
 (() => {
   if (typeof window === 'undefined') return;
-  const fingerprint = window.__antigravityZhPatchRequestedFingerprint || 'app-2.26.0-20261025-r1';
+  const fingerprint = window.__antigravityZhPatchRequestedFingerprint || 'app-2.26.0-20261025-r2';
   if (window.__antigravityZhPatchInstalled === true && window.__observedDocument === document && window.__antigravityZhPatchFingerprint === fingerprint) return;
   const updating = window.__antigravityZhPatchInstalled === true && window.__observedDocument === document;
   if (typeof window.__antigravityZhPatchCleanup === 'function') window.__antigravityZhPatchCleanup();
@@ -9,13 +9,12 @@
   window.__antigravityZhPatchFingerprint = fingerprint;
   let observer;
   let cancelled = false;
-  const pendingTimers = new Set();
+  let flushScheduler;
   window.__antigravityZhPatchCleanup = () => {
     cancelled = true;
     observer?.disconnect();
     window.removeEventListener('DOMContentLoaded', run);
-    for (const timer of pendingTimers) clearTimeout(timer);
-    pendingTimers.clear();
+    flushScheduler?.cancel();
   };
 
   const phrases = new Map([
@@ -107,6 +106,7 @@
     ['Continue "Explain and Fix" actions in the current conversation instead of starting a new one.', '在当前对话中继续执行“解释并修复”操作，而不是开启新对话。'],
     ['All terminal commands require review. The agent can read or write to any file in the machine.', '所有终端命令均需要审核。智能体可以读取或写入电脑上的任何文件。'],
     ['Confirm the command is safe to run outside of the sandbox with full network and disk access.', '确认该命令可在沙盒外安全运行，并拥有完整网络和磁盘访问权限。'],
+    ['Workflows are saved prompts that Agent can follow. To trigger a workflow, type "/" in Agent.', '工作流是智能体可以遵循的已保存提示词。要触发工作流，请在智能体中输入“/”。'],
     ['Port number for Chrome DevTools Protocol remote debugging. Leave empty for default (9222).', 'Chrome DevTools Protocol 远程调试端口号。留空则使用默认值（9222）。'],
     ['Try out early-stage features before they ship. These may change or be removed at any time.', '在正式发布前试用早期功能。这些功能可能随时更改或移除。'],
     ['When enabled, the agent will be able to access past conversations to inform its responses.', '启用后，智能体将能够访问历史对话以辅助其生成回复。'],
@@ -181,6 +181,7 @@
     ['Allow/deny agent read access to specific files or directories.', '允许或拒绝智能体读取指定文件或目录。'],
     ['Inherits your Global Permissions when working in this project.', '在此项目中工作时继承您的全局权限。'],
     ['Also includes Global Permissions when working in this project.', '在此项目中工作时还包括“全局权限”。'],
+    ['Customize Agent to get a better, more personalized experience.', '自定义智能体，获得更好、更个性化的体验。'],
     ['Allow opening pull requests and grant access to specific PRs.', '允许创建拉取请求并授予对特定 PR 的访问权限。'],
     ['Credential expires in less than 1 week. Click to refresh TDAT', '凭据将在 1 周内过期。点击刷新 TDAT'],
     ['Browse and enable plugins from the Build With Google catalog.', '从 Build With Google 目录中浏览并启用插件。'],
@@ -205,13 +206,13 @@
     ['Allow/deny agent read access to specific URLs or domains.', '允许或拒绝智能体读取指定 URL 或域名。'],
     ['Configure global allowed and denied resource permissions.', '配置全局允许和拒绝的资源权限。'],
     ['Type / and select plan to have the agent generate a plan.', '输入 / 并选择 plan 让智能体生成计划。'],
+    ['Manage project folders, agent settings, and permissions.', '管理项目文件夹、智能体设置和权限。'],
     ['Select a model using the model selector in the input box', '使用输入框中的模型选择器选择模型'],
     ['Save rule to always allow executing actions on this URL?', '保存规则以始终允许在此 URL 上执行操作？'],
     ['Configure allowed and denied URLs for browser actuation.', '配置允许和拒绝浏览器执行操作的 URL。'],
     ['Core tools and knowledge required to develop for Android', '开发 Android 应用所需的核心工具与知识'],
     ['Type / and select plan to have the agent generate a plan', '输入 / 并选择 plan 让智能体生成计划'],
     ['Scan the code to open this device in Remote Control, or ', '扫描二维码以在远程控制中打开此设备，或 '],
-    ['Manage project folders, agent settings, and permissions.', '管理项目文件夹、智能体设置和权限。'],
     ['This subagent was killed and can no longer be messaged.', '此子智能体已终止，无法再向其发送消息。'],
     ['This project overrides your global permission settings.', '此项目覆盖了您的全局权限设置。'],
     ['Include default customizations, such as default skills.', '包含默认自定义项，例如默认技能。'],
@@ -223,6 +224,7 @@
     ['for more information (this migration is experimental).', '了解更多信息（此迁移为实验性功能）。'],
     ['Sidebar after conversations are regrouped by workspace', '按工作区分组后的对话侧边栏'],
     ['URLs the agent can perform actions on via the browser.', '智能体可以通过浏览器执行操作的 URL。'],
+    ['AI may make mistakes. Double-check all generated code.', 'AI 可能会出错，请仔细核对生成的代码。'],
     ['This option is disabled while strict mode is enabled.', '启用严格模式时此选项已禁用。'],
     ['Choose between the Default and Project 4K experience.', '在默认体验与 Project 4K 体验之间选择。'],
     ['Manage your conversations from the companion website.', '从配套网站管理您的对话。'],
@@ -275,11 +277,11 @@
     ['Curated collection of agent skills for science.', '为科学领域精心挑选的智能体技能集合。'],
     ['Select light, dark, or inherit system settings.', '选择浅色、深色或继承系统设置。'],
     ['URLs the agent can read or open in the browser.', '智能体可以在浏览器中读取或打开的 URL。'],
+    ['Check availability, schedule events, and RSVP.', '查看空闲时间、安排活动并回复活动邀请。'],
     ['Save rule to always allow using this MCP tool?', '保存规则以始终允许使用此 MCP 工具？'],
     ['Configure allowed and denied URLs for reading.', '配置允许和拒绝读取的 URL。'],
     ['Continue conversation in the current workspace', '在当前工作区继续对话'],
     ['Automations do not inherit Global Permissions.', '自动化任务不继承全局权限。'],
-    ['Check availability, schedule events, and RSVP.', '查看空闲时间、安排活动并回复活动邀请。'],
     ['Any error messages seen when trying to log in', '尝试登录时看到的任何错误信息'],
     ['This setting is managed by your organization.', '此设置由您所在的组织管理。'],
     ['This option is disabled by your organization.', '此选项已被您所在的组织禁用。'],
@@ -303,11 +305,11 @@
     ['No customizations found for this workspace.', '此工作区没有找到自定义内容。'],
     ['to back up your data and run the migration.', '备份数据并运行迁移。'],
     ['Work with local agents from another device.', '从其他设备连接并使用本地智能体。'],
+    ['Search, upload, download, and share files.', '搜索、上传、下载和共享文件。'],
     ['Antigravity would like to use the browser.', 'Antigravity 想要使用浏览器。'],
     ['Confirmation required to execute this step', '执行此步骤需要确认'],
     ['Folder no longer exists or is unavailable.', '文件夹不再存在或不可用。'],
     ['Show suggestions when typing in the editor', '在编辑器中输入时显示建议'],
-    ['Search, upload, download, and share files.', '搜索、上传、下载和共享文件。'],
     ['Credential expired. Click to refresh TDAT', '凭据已过期。点击刷新 TDAT'],
     ['Allow Tab to access .gitignore exclusions', 'Tab 键访问 .gitignore 排除文件'],
     ['Ask anything, @ to mention, / for actions', '想问什么都可以，@ 引用，/ 执行动作'],
@@ -323,19 +325,20 @@
     ['GCP Project ID for enterprise features.', '适用于企业级功能的 GCP 项目 ID。'],
     ['Local permissions have higher priority.', '本地权限优先级更高。'],
     ['Manually customize individual settings.', '手动自定义各项设置。'],
+    ['Rules help guide the behavior of Agent.', '规则用于指导智能体的行为。'],
     ['Organization MCP Allowlist (Read-Only)', '组织 MCP 允许列表（只读）'],
     ['Run all commands without restrictions.', '无限制运行所有命令。'],
     ['Allow/deny specific terminal commands.', '允许或拒绝指定终端命令。'],
     ['Google Drive integration not available', 'Google 云端硬盘集成不可用'],
     ['No (tell the agent what to do instead)', '否（告诉智能体改做什么）'],
+    ['Read, edit, and export presentations.', '阅读、编辑和导出演示文稿。'],
+    ['Read, write, and format spreadsheets.', '读取、写入电子表格并设置格式。'],
     ['Automatically decide if commands run.', '自动判断是否运行命令。'],
     ['Open the agent panel on window reload', '窗口重新加载时打开智能体面板'],
     ['Include Jetski Default Customizations', '包含 Jetski 默认自定义项'],
     ['Manage your notification preferences.', '管理您的通知偏好设置。'],
     ['Outside of folders file access policy', '文件夹外访问策略'],
     ['Select where to open the conversation', '选择在哪里打开对话'],
-    ['Read, write, and format spreadsheets.', '读取、写入电子表格并设置格式。'],
-    ['Read, edit, and export presentations.', '阅读、编辑和导出演示文稿。'],
     ['Allow executing actions on this URL?', '允许在此 URL 上执行操作？'],
     ['AI Credits Used to Generate Response', '已使用 AI 积分生成回复'],
     ['Scan the code to open this device in', '扫描二维码以在远程控制中打开此设备'],
@@ -438,6 +441,8 @@
     ['Manage application settings.', '管理应用设置。'],
     ['Select Model to Send Message', '选择用于发送消息的模型'],
     ['Steps to reproduce the issue', '重现此问题的步骤'],
+    ['Read, draft, and edit docs.', '阅读、起草和编辑文档。'],
+    ['Gemini 4 Argon Weekly Limit', 'Gemini 4 Argon 周额度'],
     ['Windows Subsystem for Linux', '适用于 Linux 的 Windows 子系统'],
     ['Automatic Check for Updates', '自动检查更新'],
     ['Terms of Service & Data Use', '服务条款与数据使用'],
@@ -455,8 +460,6 @@
     ['Generate CitC Workspace VCS', '生成 CitC 工作区 VCS'],
     ['New Conversation in Project', '在项目中新建对话'],
     ['Paths the agent can modify.', '智能体可修改的路径。'],
-    ['Gemini 4 Argon Weekly Limit', 'Gemini 4 Argon 周额度'],
-    ['Read, draft, and edit docs.', '阅读、起草和编辑文档。'],
     ['Allow using this MCP tool?', '允许使用此 MCP 工具？'],
     ['No automations configured.', '尚未配置任何自动化。'],
     ['Open with External Browser', '使用外部浏览器打开'],
@@ -570,6 +573,7 @@
     ['Toggle Developer Tools', '切换开发者工具'],
     ['Toggle Voice Recording', '切换语音录制'],
     ['Weekly Limit Remaining', '剩余周额度'],
+    ['Antigravity - Settings', 'Antigravity - 设置'],
     ['Default Workspace VCS', '默认工作区 VCS'],
     ['More feedback options', '更多反馈选项'],
     ['Conversation Archived', '对话已归档'],
@@ -724,6 +728,7 @@
     ['Undo to this point', '撤销到此处'],
     ['Add inline comment', '添加行内批注'],
     ['Plan Review Policy', '计划审核策略'],
+    ['Agent Conversation', '智能体对话'],
     ['Local Permissions', '本地权限'],
     ['Selection Actions', '选择操作'],
     ['Proceed with Plan', '按计划继续'],
@@ -861,7 +866,6 @@
     ['Added (Staged)', '已添加（已暂存）'],
     ['Unstage change', '取消暂存更改'],
     ['Merge Conflict', '合并冲突'],
-    ['Refresh Skills', '刷新技能'],
     ['Refresh skills', '刷新技能'],
     ['Add automation', '添加自动化'],
     ['Inherit Global', '继承全局设置'],
@@ -891,7 +895,6 @@
     ['Import failed:', '导入失败：'],
     ['Inline Actions', '内联操作'],
     ['Mark as Unread', '标记为未读'],
-    ['Mark As Unread', '标记为未读'],
     ['Missing Folder', '缺失文件夹'],
     ['Models & Usage', '模型与用量'],
     ['No MCP Servers', '没有 MCP 服务器'],
@@ -921,7 +924,6 @@
     ['Give Feedback', '提供反馈'],
     ['Delete plugin', '删除插件'],
     ['Stop Subagent', '停止子智能体'],
-    ['Stop subagent', '停止子智能体'],
     ['Archived Only', '仅显示已归档'],
     ['Files Changed', '已更改的文件'],
     ['Custom Agents', '自定义智能体'],
@@ -936,7 +938,6 @@
     ['Allow options', '允许选项'],
     ['Chat Settings', '聊天设置'],
     ['CitC Settings', 'CitC 设置'],
-    ['conversations', '对话'],
     ['Conversations', '对话'],
     ['Default Light', '默认浅色'],
     ['Feedback Type', '反馈类型'],
@@ -957,6 +958,8 @@
     ['Send Feedback', '发送反馈'],
     ['Tab to Import', '按下 Tab 导入'],
     ['Toggle Editor', '切换编辑器'],
+    ['Back to Agent', '返回智能体'],
+    ['Customization', '自定义项'],
     ['Show details', '显示详情'],
     ['Chime volume', '提示音音量'],
     ['Open Preview', '打开预览'],
@@ -967,9 +970,7 @@
     ['Delete Skill', '删除技能'],
     ['Rename Group', '重命名分组'],
     ['Recent Files', '最近文件'],
-    ['Recent files', '最近文件'],
     ['Edit comment', '编辑评论'],
-    ['Edit Comment', '编辑评论'],
     ['No subagents', '无子智能体'],
     ['Custom Order', '自定义顺序'],
     ['Manage Hooks', '管理钩子'],
@@ -983,7 +984,6 @@
     ['Browser Task', '浏览器任务'],
     ['Close Folder', '关闭文件夹'],
     ['Confirm Quit', '确认退出'],
-    ['conversation', '对话'],
     ['Conversation', '对话'],
     ['Copy Command', '复制命令'],
     ['Copy Content', '复制内容'],
@@ -994,7 +994,6 @@
     ['Full machine', '整机访问'],
     ['Last Updated', '最近更新'],
     ['Mark as Read', '标记为已读'],
-    ['Mark As Read', '标记为已读'],
     ['More actions', '更多操作'],
     ['New Worktree', '新建工作树'],
     ['Record Audio', '录制音频'],
@@ -1005,12 +1004,13 @@
     ['User message', '用户消息'],
     ['Weekly Limit', '周额度'],
     ['More options', '更多选项'],
+    ['AI Shortcuts', 'AI 快捷方式'],
+    ['Danger Zone', '危险操作'],
     ['Setting up…', '正在配置…'],
     ['Thinking...', '思考中...'],
     ['Unavailable', '不可用'],
     ['Delete Hook', '删除钩子'],
     ['Add Handler', '添加处理程序'],
-    ['Cancel Step', '取消此步骤'],
     ['Cancel step', '取消此步骤'],
     ['Only Unread', '仅显示未读'],
     ['Last 7 days', '最近 7 天'],
@@ -1062,7 +1062,6 @@
     ['Device Name', '设备名称'],
     ['App version', '应用版本'],
     ['Modified in', '已在'],
-    ['Danger Zone', '危险操作'],
     ['Loading...', '正在加载...'],
     ['Yes, allow', '是，允许'],
     ['UI Actions', '界面操作'],
@@ -1083,7 +1082,6 @@
     ['Permission', '权限'],
     ['Add Folder', '添加文件夹'],
     ['Allow once', '允许一次'],
-    ['Allow Once', '允许一次'],
     ['Always Ask', '始终询问'],
     ['Appearance', '外观'],
     ['Automation', '自动化'],
@@ -1108,14 +1106,12 @@
     ['Turbo mode', '极速模式'],
     ['View Debug', '查看调试信息'],
     ['Working...', '正在工作...'],
-    ['workspaces', '工作区'],
     ['Workspaces', '工作区'],
     ['Your Plan:', '您的套餐：'],
     ['View Diff', '查看差异'],
     ['Installed', '已安装'],
     ['Completed', '已完成'],
     ['Try Again', '重试'],
-    ['Try again', '重试'],
     ['Configure', '配置'],
     ['Subagents', '子智能体'],
     ['Terminals', '终端'],
@@ -1129,7 +1125,6 @@
     ['Add Model', '添加模型'],
     ['Automatic', '自动'],
     ['Copy path', '复制路径'],
-    ['Copy Path', '复制路径'],
     ['Customize', '自定义'],
     ['Developer', '开发者'],
     ['Execution', '执行'],
@@ -1145,10 +1140,10 @@
     ['Shortcuts', '快捷键'],
     ['Subtitles', '副标题'],
     ['Tab Speed', 'Tab 补全速度'],
-    ['workspace', '工作区'],
     ['Workspace', '工作区'],
     ['Artifacts', '产物列表'],
     ['copy link', '复制链接'],
+    ['Workflows', '工作流'],
     ['Nickname', '昵称'],
     ['Contrast', '对比度'],
     ['Thinking', '思考中'],
@@ -1182,11 +1177,9 @@
     ['Projects', '项目'],
     ['Searched', '已搜索'],
     ['searches', '搜索'],
-    ['Searches', '搜索'],
     ['See less', '收起'],
     ['Settings', '设置'],
     ['Show all', '显示全部'],
-    ['Show All', '显示全部'],
     ['Sign Out', '退出登录'],
     ['Terminal', '终端'],
     ['Worktree', '工作树'],
@@ -1219,11 +1212,9 @@
     ['Deleted', '已删除'],
     ['Dismiss', '忽略'],
     ['Enabled', '已启用'],
-    ['folders', '文件夹'],
     ['Folders', '文件夹'],
     ['General', '常规'],
     ['Go Back', '后退'],
-    ['Go Live', '实时预览 (Go Live)'],
     ['History', '历史'],
     ['Plugin:', '插件：'],
     ['Plugins', '插件'],
@@ -1261,7 +1252,6 @@
     ['Editor', '编辑器'],
     ['Export', '导出'],
     ['Filter', '筛选'],
-    ['folder', '文件夹'],
     ['Folder', '文件夹'],
     ['Global', '全局'],
     ['Inline', '内联'],
@@ -1276,7 +1266,6 @@
     ['Recent', '最近使用'],
     ['Rename', '重命名'],
     ['Review', '审核'],
-    ['search', '搜索'],
     ['Search', '搜索'],
     ['Skills', '技能'],
     ['Snooze', '稍后提醒'],
@@ -1316,7 +1305,8 @@
     ['Theme', '主题'],
     ['Usage', '用量'],
     ['Go to', '转到'],
-    ['Go To', '转到'],
+    ['Agent', '智能体'],
+    ['Start', '开始'],
     ['Auto', '自动'],
     ['Deny', '拒绝'],
     ['Slow', '慢'],
@@ -1334,7 +1324,6 @@
     ['Dark', '深色'],
     ['Edit', '编辑'],
     ['Fast', '快'],
-    ['file', '文件'],
     ['File', '文件'],
     ['Help', '帮助'],
     ['High', '高'],
@@ -1413,51 +1402,40 @@
     return null;
   }
 
+  const progressVerbs = {
+    exploring: '正在探索', explored: '已探索',
+    editing: '正在编辑', edited: '已编辑',
+    running: '正在运行', ran: '已运行',
+    searching: '正在搜索', searched: '已搜索',
+    reading: '正在读取', read: '已读取'
+  };
+  const progressNouns = new Map([
+    ['file', ['文件', '个']], ['files', ['文件', '个']],
+    ['folder', ['文件夹', '个']], ['folders', ['文件夹', '个']],
+    ['command', ['命令', '个']], ['commands', ['命令', '个']],
+    ['artifact', ['产物', '个']], ['artifacts', ['产物', '个']],
+    ['search', ['搜索', '次']], ['searches', ['搜索', '次']],
+    ['task', ['任务', '个']], ['tasks', ['任务', '个']],
+    ['page', ['网页', '个']], ['pages', ['网页', '个']],
+    ['image', ['图片', '张']], ['images', ['图片', '张']],
+    ['action', ['操作', '项']], ['actions', ['操作', '项']],
+  ]);
+  const progressPartRegex = /^(exploring|explored|editing|edited|running|ran|searching|searched|reading|read)(?:\s*(?:(\d+)\s+)?(files?|folders?|commands?|artifacts?|searches?|tasks?|pages?|images?|actions?))?$/i;
+
   // 智能体任务动态状态栏（例如：Exploring files, running commands ⌵）
   function translateAgentProgress(str) {
     if (!str) return null;
     const clean = str.trim().replace(/\s*[⌵▼▾ˇ⌄\u2304\u25be\u25bc\u25bd]\s*$/, '').trim();
-    const verbMap = {
-      exploring: '正在探索', explored: '已探索',
-      editing: '正在编辑', edited: '已编辑',
-      running: '正在运行', ran: '已运行',
-      searching: '正在搜索', searched: '已搜索',
-      reading: '正在读取', read: '已读取'
-    };
-    const nounMap = {
-      file: '文件', files: '文件',
-      folder: '文件夹', folders: '文件夹',
-      command: '命令', commands: '命令',
-      artifact: '产物', artifacts: '产物',
-      search: '搜索', searches: '搜索',
-      task: '任务', tasks: '任务',
-      page: '网页', pages: '网页',
-      image: '图片', images: '图片',
-      action: '操作', actions: '操作'
-    };
-    const unitMap = {
-      file: '个', files: '个',
-      folder: '个', folders: '个',
-      command: '个', commands: '个',
-      artifact: '个', artifacts: '个',
-      search: '次', searches: '次',
-      task: '个', tasks: '个',
-      page: '个', pages: '个',
-      image: '张', images: '张',
-      action: '项', actions: '项'
-    };
-
-    const partRegex = /^(exploring|explored|editing|edited|running|ran|searching|searched|reading|read)(?:\s*(?:(\d+)\s+)?(files?|folders?|commands?|artifacts?|searches?|tasks?|pages?|images?|actions?))?$/i;
 
     const parts = clean.split(/\s*,\s*/);
     if (parts.length === 0) return null;
 
     const translatedParts = [];
     for (const part of parts) {
-      const m = part.trim().match(partRegex);
+      const m = part.trim().match(progressPartRegex);
       if (!m) return null;
       const verbKey = m[1].toLowerCase();
-      const v = verbMap[verbKey] || m[1];
+      const v = progressVerbs[verbKey] || m[1];
       const count = m[2];
       const nounRaw = m[3];
       if (!nounRaw) {
@@ -1466,8 +1444,9 @@
         continue;
       }
       const nounKey = nounRaw.toLowerCase();
-      const n = nounMap[nounKey] || nounRaw;
-      const unit = unitMap[nounKey] || '个';
+      const nounEntry = progressNouns.get(nounKey);
+      const n = nounEntry ? nounEntry[0] : nounRaw;
+      const unit = nounEntry ? nounEntry[1] : '个';
       if (count !== undefined) {
         translatedParts.push(`${v} ${count} ${unit}${n}`);
       } else {
@@ -1503,49 +1482,50 @@
       .replace(/\s+/g, ' ');
   }
 
+  const permissionScopes = {
+    'when not in a project': '不在项目中时',
+    'in this conversation': '在此对话中',
+    'in this project': '在此项目中',
+    'in this workspace': '在此工作区',
+    globally: '全局',
+  };
+  const permissionActions = {
+    'read access to this path': '读取此路径',
+    'write access to this path': '写入此路径',
+    'reading this URL': '读取此 URL',
+    'executing actions on this URL': '在此 URL 上执行操作',
+    'running this command outside the sandbox': '在沙盒外运行此命令',
+    'running this command': '运行此命令',
+    'using this MCP tool': '使用此 MCP 工具',
+    'run (unsandboxed)': '在沙盒外运行',
+    'grant administrator access for': '授予管理员权限',
+    run: '运行',
+    read: '读取',
+    write: '写入',
+    use: '使用',
+    access: '访问',
+  };
+
   // 权限目标属于数据：只翻译模板，并立即返回，禁止后续规则改写命令/路径。
   function translatePermission(value) {
     const text = value.trim();
     // MutationObserver 会再次观察到翻译后的文本；二次处理也须保持目标不变。
     if (/^(正在请求权限：|智能体需要权限才能|是，并.*(?:保存|始终允许)|保存规则以始终允许\s|与您配置的询问权限冲突：|需要手动确认：|允许\s)/s.test(text)) return value;
-    const scopes = {
-      'when not in a project': '不在项目中时',
-      'in this conversation': '在此对话中',
-      'in this project': '在此项目中',
-      'in this workspace': '在此工作区',
-      globally: '全局',
-    };
-    const actions = {
-      'read access to this path': '读取此路径',
-      'write access to this path': '写入此路径',
-      'reading this URL': '读取此 URL',
-      'executing actions on this URL': '在此 URL 上执行操作',
-      'running this command outside the sandbox': '在沙盒外运行此命令',
-      'running this command': '运行此命令',
-      'using this MCP tool': '使用此 MCP 工具',
-      'run (unsandboxed)': '在沙盒外运行',
-      'grant administrator access for': '授予管理员权限',
-      run: '运行',
-      read: '读取',
-      write: '写入',
-      use: '使用',
-      access: '访问',
-    };
     let m, translated;
     if ((m = text.match(/^Requesting permission to (running this command outside the sandbox|running this command|read access to this path|write access to this path|reading this URL|executing actions on this URL|using this MCP tool|run \(unsandboxed\)|grant administrator access for|run|read|write|use|access) ([\s\S]+)$/))) {
-      translated = '正在请求权限：' + actions[m[1]] + ' ' + m[2];
+      translated = '正在请求权限：' + permissionActions[m[1]] + ' ' + m[2];
     } else if ((m = text.match(/^Agent needs permission to execute JavaScript on ([\s\S]+)$/))) {
       translated = '智能体需要权限才能在 ' + m[1] + ' 上执行 JavaScript';
     } else if ((m = text.match(/^Agent needs permission to act on ([\s\S]+)$/))) {
       translated = '智能体需要权限才能操作 ' + m[1];
     } else if ((m = text.match(/^Yes, save rule for '([\s\S]*)' (when not in a project|in this conversation|in this project|in this workspace|globally)$/))) {
-      translated = `是，并${scopes[m[2]]}保存 '${m[1]}' 的规则`;
+      translated = `是，并${permissionScopes[m[2]]}保存 '${m[1]}' 的规则`;
     } else if ((m = text.match(/^Yes, save rule (when not in a project|in this conversation|in this project|in this workspace|globally)$/))) {
-      translated = `是，并${scopes[m[1]]}保存规则`;
+      translated = `是，并${permissionScopes[m[1]]}保存规则`;
     } else if ((m = text.match(/^Yes, and always allow '([\s\S]*)'(?: (when not in a project|in this conversation|in this project|in this workspace|globally))?$/))) {
-      translated = `是，并${scopes[m[2]] || ''}始终允许 '${m[1]}'`;
+      translated = `是，并${permissionScopes[m[2]] || ''}始终允许 '${m[1]}'`;
     } else if ((m = text.match(/^Yes, and always allow(?: (when not in a project|in this conversation|in this project|in this workspace|globally))?$/))) {
-      translated = `是，并${scopes[m[1]] || ''}始终允许`;
+      translated = `是，并${permissionScopes[m[1]] || ''}始终允许`;
     } else if ((m = text.match(/^Conflicts with your configured Ask permission: ([\s\S]+)$/))) {
       translated = '与您配置的询问权限冲突：' + m[1];
     } else if ((m = text.match(/^Requires manual confirmation: ([\s\S]+)$/))) {
@@ -1773,6 +1753,52 @@
     return false;
   }
 
+  const antigravityContainerSelector = [
+    '[class*="antigravity"]',
+    '[id*="antigravity"]',
+    '[class*="jetski"]',
+    '[id*="jetski"]',
+    '.client-experience-pill',
+    '.diff-hunk-widget',
+    '.keep-changes',
+    '.discard-changes',
+    '.monaco-dialog-box',
+    '.dialog-box',
+    '[role="dialog"]',
+    '.inline-chat-widget',
+    '.inline-chat-overflow',
+    '.monaco-hover',
+    '.monaco-hover-content',
+    '.context-view',
+    '.monaco-select-box',
+    '.monaco-menu',
+    '.quick-input-widget',
+    '.notification-toast',
+    '.notifications-toasts',
+    // VS Code/Antigravity IDE 设置页是异步渲染的，页面本身不一定带有
+    // antigravity/jetski 类名；显式纳入设置容器，避免 Settings 页面被白名单过滤。
+    '.settings-editor',
+    '.settings-body',
+    '[class*="settings"]',
+    '[id*="settings"]',
+    '#workbench\\.parts\\.titlebar .titlebar-right',
+    '#workbench\\.parts\\.titlebar .action-label',
+    '#workbench\\.parts\\.titlebar .action-nudge-button',
+    '.antigravity-welcome-container',
+    '[class*="welcome"]',
+    '[class*="agent"]',
+    '[id*="agent"]',
+    // 状态栏与辅助栏标题属原生外壳，不带 antigravity 类名
+    '.part.statusbar',
+    '.statusbar-item',
+    '.part.auxiliarybar .composite.title',
+    '.part.auxiliarybar .title-label',
+    // 输入框补全等弹层挂在 body 下，和 .monaco-workbench 同级
+    '.monaco-workbench ~ div',
+    '[role="listbox"]',
+    '[role="option"]'
+  ].join(', ');
+
   function isInAntigravityContainer(node) {
     const element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
     if (!element) return false;
@@ -1783,49 +1809,34 @@
       window.location.href.indexOf('\\workbench.html') >= 0;
     if (!isMainWindow) return true;
 
-
-    const containerSelector = [
-      '[class*="antigravity"]',
-      '[id*="antigravity"]',
-      '[class*="jetski"]',
-      '[id*="jetski"]',
-      '.client-experience-pill',
-      '.diff-hunk-widget',
-      '.keep-changes',
-      '.discard-changes',
-      '.monaco-dialog-box',
-      '.dialog-box',
-      '[role="dialog"]',
-      '.inline-chat-widget',
-      '.inline-chat-overflow',
-      '.monaco-hover',
-      '.monaco-hover-content',
-      '.context-view',
-      '.monaco-select-box',
-      '.monaco-menu',
-      '.quick-input-widget',
-      '.notification-toast',
-      '.notifications-toasts',
-      // VS Code/Antigravity IDE 设置页是异步渲染的，页面本身不一定带有
-      // antigravity/jetski 类名；显式纳入设置容器，避免 Settings 页面被白名单过滤。
-      '.settings-editor',
-      '.settings-body',
-      '[class*="settings"]',
-      '[id*="settings"]',
-      '#workbench\\.parts\\.titlebar .titlebar-right',
-      '#workbench\\.parts\\.titlebar .action-label',
-      '#workbench\\.parts\\.titlebar .action-nudge-button',
-      '.antigravity-welcome-container',
-      '[class*="welcome"]',
-      '[class*="agent"]',
-      '[id*="agent"]'
-    ].join(', ');
-
-    return !!element.closest(containerSelector);
+    return !!element.closest(antigravityContainerSelector);
   }
 
-  // React 将该提示拆成多个文本节点，按中文语序重排各节点并保留链接。
+  // React 把部分说明文案拆成多个文本节点，按中文语序重写各节点以保留行内链接。
+  const composedSentences = [
+    {
+      match: /^Also includes (?:Global Permissions|全局权限) when working in these conversations\./,
+      nodes: new Map([
+        ['Also includes', '在这些对话中工作时，还包括'],
+        ['when working', ''],
+        ['in these conversations', ''],
+        ['.', '。'],
+      ]),
+    },
+    {
+      match: /^Select one of the (?:two|three) options\. Agent settings and permissions can be further customized below\./,
+      nodes: new Map([
+        ['Select one of the', '选择以下'],
+        ['two', '两'],
+        ['three', '三'],
+        ['options. Agent settings and permissions can be further customized below.', '项之一。智能体设置和权限可在下方进一步自定义。'],
+      ]),
+    },
+  ];
+
   function translateComposedElement(element) {
+    // 两条组合句都至少需要 3 个文本节点；叶子元素直接跳过，避免读取整棵子树的 textContent。
+    if (!element.childNodes || element.childNodes.length < 3) return false;
     const text = (element.textContent || '').replace(/\s+/g, ' ').trim();
     // 项目说明也会被链接拆分；验证已知结构后只修改直接文本节点。
     if (/^Also includes (?:Global Permissions|全局权限) when working in this project\.(?: (?:Learn more\.|了解更多[。.]?))?$/.test(text)) {
@@ -1843,18 +1854,13 @@
       }
       return true;
     }
-    if (!/^Also includes (?:Global Permissions|全局权限) when working in these conversations\./.test(text)) return false;
-    const updates = new Map([
-      ['Also includes', '在这些对话中工作时，还包括'],
-      ['when working', ''],
-      ['in these conversations', ''],
-      ['.', '。'],
-    ]);
+    const rule = composedSentences.find((item) => item.match.test(text));
+    if (!rule) return false;
     for (const child of element.childNodes) {
       if (child.nodeType !== Node.TEXT_NODE) continue;
       const key = (child.nodeValue || '').trim();
-      if (!updates.has(key)) continue;
-      child.nodeValue = updates.get(key);
+      if (!rule.nodes.has(key)) continue;
+      child.nodeValue = rule.nodes.get(key);
       child.__zh_patched = true;
     }
     return true;
@@ -1915,6 +1921,33 @@
     }
   }
 
+  // 把同一轮内的多个变更批次累积到一个定时器，避免每个 MutationObserver 回调各建一个 timer。
+  function createFlushScheduler(flush) {
+    let timer = null;
+    let nodes = [];
+    let elements = [];
+    const cancel = () => {
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+      nodes = [];
+      elements = [];
+    };
+    const schedule = (newNodes, newElements) => {
+      for (const node of newNodes) nodes.push(node);
+      for (const element of newElements) elements.push(element);
+      if (timer !== null) return;
+      timer = setTimeout(() => {
+        timer = null;
+        const batchNodes = nodes;
+        const batchElements = elements;
+        nodes = [];
+        elements = [];
+        flush(batchNodes, batchElements);
+      }, 0);
+    };
+    return { schedule, cancel };
+  }
+
   function run() {
     if (cancelled) return;
     document.documentElement.lang = 'zh-CN';
@@ -1923,6 +1956,12 @@
       for (let node = stale.nextNode(); node; node = stale.nextNode()) node.__zh_patched = false;
     }
     translateNode(document);
+
+    flushScheduler = createFlushScheduler((batchNodes, batchElements) => {
+      if (cancelled) return;
+      for (const node of batchNodes) translateNode(node);
+      for (const element of batchElements) translateElement(element);
+    });
 
     observer = new MutationObserver((mutations) => {
       const nodesToTranslate = [];
@@ -1952,17 +1991,7 @@
       }
 
       if (nodesToTranslate.length > 0 || elementsToTranslate.length > 0) {
-        const timer = setTimeout(() => {
-          pendingTimers.delete(timer);
-          if (cancelled) return;
-          for (const node of nodesToTranslate) {
-            translateNode(node);
-          }
-          for (const el of elementsToTranslate) {
-            translateElement(el);
-          }
-        }, 0);
-        pendingTimers.add(timer);
+        flushScheduler.schedule(nodesToTranslate, elementsToTranslate);
       }
     });
     observer.observe(document, {

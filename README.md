@@ -3,8 +3,6 @@
 专为 **Google Antigravity** 及 **Antigravity IDE** 开发的中文汉化工具。
 
 > **适配版本**：**Antigravity `2.26.0`** 与 **Antigravity IDE `2.5.5`**。
->
-> 本轮更新针对普通版 `2.26.0`，词库扩充至 1338 条经过实际前端资源核对的词条；IDE 的静态补丁与语言配置未调整。动态汉化基于 CDP 注入，界面文案或 DOM 结构变化时仍可能需要更新词库；静态补丁与 IDE 内部目录结构强相关。
 
 ---
 
@@ -84,7 +82,7 @@ antigravity-hans --trust-external-overlay  # 显式信任同目录外部汉化�
 
 ## 源码编译
 
-需要 **Go 1.26.9 或更高版本**（`go.mod` 已声明，旧工具链会自动下载对应版本）。
+需要 **Go 1.27.3 或更高版本**（`go.mod` 已声明，旧工具链会自动下载对应版本）。
 
 ```bash
 ./build.sh    # 交叉编译 macOS / Windows 三个平台到 dist/

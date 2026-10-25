@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const source = fs.readFileSync(new URL('../antigravity-hans-overlay.js', import.meta.url), 'utf8');
 const context = { window: { addEventListener() {}, removeEventListener() {}, location: { pathname: '/', href: 'http://127.0.0.1/' } }, document: { readyState: 'loading' } };
 vm.createContext(context);
-vm.runInContext(source.replace('  function run() {', '  globalThis.translateForTest = translate; globalThis.translateElementForTest = translateElement; globalThis.translateNodeForTest = translateNode;\n  function run() {'), context);
+vm.runInContext(source.replace('  function run() {', '  globalThis.translateForTest = translate; globalThis.translateElementForTest = translateElement; globalThis.translateNodeForTest = translateNode; globalThis.isInAntigravityContainerForTest = isInAntigravityContainer; globalThis.createFlushSchedulerForTest = createFlushScheduler;\n  function run() {'), context);
 const translate = context.translateForTest;
 
 test('updated overlays replace their observer and use the requested fingerprint', () => {
@@ -168,6 +168,126 @@ test('split Also includes prompt is reordered while keeping links', () => {
   assert.equal(textC.nodeValue, '');
   assert.equal(textD.nodeValue, '');
   assert.equal(textE.nodeValue, '。');
+});
+
+test('2.5.5 IDE chrome strings are localized', () => {
+  for (const [input, expected] of [
+    ['AI may make mistakes. Double-check all generated code.', 'AI 可能会出错，请仔细核对生成的代码。'],
+    ['Agent Conversation', '智能体对话'],
+    ['AI Shortcuts', 'AI 快捷方式'],
+    ['Agent', '智能体'],
+    ['Start', '开始'],
+    ['Antigravity - Settings', 'Antigravity - 设置'],
+    ['Back to Agent', '返回智能体'],
+    ['Workflows', '工作流'],
+    ['Customization', '自定义项'],
+    ['Rules help guide the behavior of Agent.', '规则用于指导智能体的行为。'],
+    ['Customize Agent to get a better, more personalized experience.', '自定义智能体，获得更好、更个性化的体验。'],
+    ['Workflows are saved prompts that Agent can follow. To trigger a workflow, type "/" in Agent.', '工作流是智能体可以遵循的已保存提示词。要触发工作流，请在智能体中输入“/”。'],
+    ['Go Live', '实时预览 (Go Live)'],
+  ]) assert.equal(translate(input), expected);
+});
+
+test('IDE status bar, auxiliary title and portal layers are whitelisted', () => {
+  context.Node = { ELEMENT_NODE: 1, TEXT_NODE: 3 };
+  const originalLocation = context.window.location;
+  context.window.location = { pathname: '/workbench.html', href: 'vscode-file://vscode-app/workbench.html' };
+  const build = (marker) => ({ nodeType: 1, closest: (selector) => (selector.includes(marker) ? {} : null) });
+  try {
+    assert.equal(context.isInAntigravityContainerForTest(build('.part.statusbar')), true, 'status bar rejected');
+    assert.equal(context.isInAntigravityContainerForTest(build('.part.auxiliarybar .title-label')), true, 'auxiliary title rejected');
+    assert.equal(context.isInAntigravityContainerForTest(build('.monaco-workbench ~ div')), true, 'portal layer rejected');
+    assert.equal(context.isInAntigravityContainerForTest(build('.unrelated-part')), false, 'unrelated part accepted');
+  } finally {
+    context.window.location = originalLocation;
+  }
+});
+
+test('security mode sentence with standalone number node is translated', () => {
+  context.Node = { ELEMENT_NODE: 1, TEXT_NODE: 3 };
+  const build = (numberText) => {
+    const first = { nodeType: 3, nodeValue: 'Select one of the ' };
+    const number = { nodeType: 3, nodeValue: numberText };
+    const rest = { nodeType: 3, nodeValue: ' options. Agent settings and permissions can be further customized below.' };
+    const element = {
+      nodeType: 1,
+      textContent: `Select one of the ${numberText} options. Agent settings and permissions can be further customized below.`,
+      childNodes: [first, number, rest],
+      closest() { return null; },
+      getAttribute() { return null; },
+      setAttribute() {},
+    };
+    context.translateElementForTest(element);
+    return [first, number, rest].map((node) => node.nodeValue).join('');
+  };
+  assert.equal(build('three'), '选择以下三项之一。智能体设置和权限可在下方进一步自定义。');
+  assert.equal(build('two'), '选择以下两项之一。智能体设置和权限可在下方进一步自定义。');
+});
+
+test('merged case variants still translate through the lowercase fallback', () => {
+  const pairs = [
+    ['Refresh Skills', 'Refresh skills', '刷新技能'],
+    ['Mark as Unread', 'Mark As Unread', '标记为未读'],
+    ['Stop Subagent', 'Stop subagent', '停止子智能体'],
+    ['conversations', 'Conversations', '对话'],
+    ['Recent Files', 'Recent files', '最近文件'],
+    ['Edit comment', 'Edit Comment', '编辑评论'],
+    ['conversation', 'Conversation', '对话'],
+    ['Mark as Read', 'Mark As Read', '标记为已读'],
+    ['Cancel Step', 'Cancel step', '取消此步骤'],
+    ['Allow once', 'Allow Once', '允许一次'],
+    ['workspaces', 'Workspaces', '工作区'],
+    ['Try Again', 'Try again', '重试'],
+    ['Copy path', 'Copy Path', '复制路径'],
+    ['workspace', 'Workspace', '工作区'],
+    ['searches', 'Searches', '搜索'],
+    ['Show all', 'Show All', '显示全部'],
+    ['folders', 'Folders', '文件夹'],
+    ['folder', 'Folder', '文件夹'],
+    ['search', 'Search', '搜索'],
+    ['Go to', 'Go To', '转到'],
+    ['file', 'File', '文件'],
+  ];
+  for (const [first, second, expected] of pairs) {
+    assert.equal(translate(first), expected);
+    assert.equal(translate(second), expected);
+  }
+});
+
+test('mutation batches share one timer and cancel drops pending work', () => {
+  const timers = new Map();
+  let nextId = 1;
+  context.setTimeout = (callback) => { const id = nextId++; timers.set(id, callback); return id; };
+  context.clearTimeout = (id) => timers.delete(id);
+  const calls = [];
+  const scheduler = context.createFlushSchedulerForTest((nodes, elements) => calls.push(`${nodes.join(',')}|${elements.join(',')}`));
+  scheduler.schedule([1], [10]);
+  scheduler.schedule([2], [20]);
+  assert.equal(timers.size, 1, '应只创建一个定时器');
+  const [id, callback] = [...timers.entries()][0];
+  timers.delete(id);
+  callback();
+  assert.deepEqual(calls, ['1,2|10,20'], '两个批次应按顺序合并处理');
+  scheduler.schedule([3], []);
+  assert.equal(timers.size, 1);
+  scheduler.cancel();
+  assert.equal(timers.size, 0, 'cleanup 应清除待执行的定时器');
+  assert.deepEqual(calls, ['1,2|10,20'], '取消后不应再处理批次');
+});
+
+test('composed sentence detection skips elements with fewer than 3 child nodes', () => {
+  context.Node = { ELEMENT_NODE: 1, TEXT_NODE: 3 };
+  const text = { nodeType: 3, nodeValue: 'Select one of the three options. Agent settings and permissions can be further customized below.' };
+  const element = {
+    nodeType: 1,
+    textContent: text.nodeValue,
+    childNodes: [text],
+    closest() { return null; },
+    getAttribute() { return null; },
+    setAttribute() {},
+  };
+  context.translateElementForTest(element);
+  assert.equal(text.nodeValue.includes('three'), true, '少于 3 个文本节点时不应读取并改写 textContent');
 });
 
 test('lint catches untranslated words and permission polarity reversals', () => {
