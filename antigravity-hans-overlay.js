@@ -206,6 +206,7 @@
     ['Allow/deny agent read access to specific URLs or domains.', '允许或拒绝智能体读取指定 URL 或域名。'],
     ['Configure global allowed and denied resource permissions.', '配置全局允许和拒绝的资源权限。'],
     ['Type / and select plan to have the agent generate a plan.', '输入 / 并选择 plan 让智能体生成计划。'],
+    ['Manage project folders, agent settings, and permissions.', '管理项目文件夹、智能体设置和权限。'],
     ['Select a model using the model selector in the input box', '使用输入框中的模型选择器选择模型'],
     ['Save rule to always allow executing actions on this URL?', '保存规则以始终允许在此 URL 上执行操作？'],
     ['Configure allowed and denied URLs for browser actuation.', '配置允许和拒绝浏览器执行操作的 URL。'],
@@ -276,6 +277,7 @@
     ['Curated collection of agent skills for science.', '为科学领域精心挑选的智能体技能集合。'],
     ['Select light, dark, or inherit system settings.', '选择浅色、深色或继承系统设置。'],
     ['URLs the agent can read or open in the browser.', '智能体可以在浏览器中读取或打开的 URL。'],
+    ['Check availability, schedule events, and RSVP.', '查看空闲时间、安排活动并回复活动邀请。'],
     ['Save rule to always allow using this MCP tool?', '保存规则以始终允许使用此 MCP 工具？'],
     ['Configure allowed and denied URLs for reading.', '配置允许和拒绝读取的 URL。'],
     ['Continue conversation in the current workspace', '在当前工作区继续对话'],
@@ -303,6 +305,7 @@
     ['No customizations found for this workspace.', '此工作区没有找到自定义内容。'],
     ['to back up your data and run the migration.', '备份数据并运行迁移。'],
     ['Work with local agents from another device.', '从其他设备连接并使用本地智能体。'],
+    ['Search, upload, download, and share files.', '搜索、上传、下载和共享文件。'],
     ['Antigravity would like to use the browser.', 'Antigravity 想要使用浏览器。'],
     ['Confirmation required to execute this step', '执行此步骤需要确认'],
     ['Folder no longer exists or is unavailable.', '文件夹不再存在或不可用。'],
@@ -328,6 +331,8 @@
     ['Allow/deny specific terminal commands.', '允许或拒绝指定终端命令。'],
     ['Google Drive integration not available', 'Google 云端硬盘集成不可用'],
     ['No (tell the agent what to do instead)', '否（告诉智能体改做什么）'],
+    ['Read, edit, and export presentations.', '阅读、编辑和导出演示文稿。'],
+    ['Read, write, and format spreadsheets.', '读取、写入电子表格并设置格式。'],
     ['Automatically decide if commands run.', '自动判断是否运行命令。'],
     ['Open the agent panel on window reload', '窗口重新加载时打开智能体面板'],
     ['Include Jetski Default Customizations', '包含 Jetski 默认自定义项'],
@@ -436,6 +441,8 @@
     ['Manage application settings.', '管理应用设置。'],
     ['Select Model to Send Message', '选择用于发送消息的模型'],
     ['Steps to reproduce the issue', '重现此问题的步骤'],
+    ['Read, draft, and edit docs.', '阅读、起草和编辑文档。'],
+    ['Gemini 4 Argon Weekly Limit', 'Gemini 4 Argon 周额度'],
     ['Windows Subsystem for Linux', '适用于 Linux 的 Windows 子系统'],
     ['Automatic Check for Updates', '自动检查更新'],
     ['Terms of Service & Data Use', '服务条款与数据使用'],
@@ -998,6 +1005,7 @@
     ['Weekly Limit', '周额度'],
     ['More options', '更多选项'],
     ['AI Shortcuts', 'AI 快捷方式'],
+    ['Danger Zone', '危险操作'],
     ['Setting up…', '正在配置…'],
     ['Thinking...', '思考中...'],
     ['Unavailable', '不可用'],
@@ -1635,6 +1643,11 @@
   // 核心翻译流水线：精准完全匹配优先 -> 动态进度栏 -> 长句及复合短语子串 -> 动态变量规则
   function translate(value) {
     if (!value || !/[A-Za-z]/.test(value)) return value;
+    // 项目名称属于数据；完整删除模板须先于通用词条处理。
+    // 观察器重处理译文时，也不能改写名称中的英文。
+    if (/^永久删除项目“[\s\S]*”及其中的 \d+ 个活跃对话。$/.test(value.trim())) return value;
+    const deletion = value.trim().match(/^Permanently delete ([\s\S]+) including (\d+) active conversations?\.$/);
+    if (deletion) return value.replace(value.trim(), () => `永久删除项目“${deletion[1]}”及其中的 ${deletion[2]} 个活跃对话。`);
     const permission = translatePermission(value);
     if (permission !== null) return permission;
     const trimmed = value.trim();
@@ -1825,6 +1838,22 @@
     // 两条组合句都至少需要 3 个文本节点；叶子元素直接跳过，避免读取整棵子树的 textContent。
     if (!element.childNodes || element.childNodes.length < 3) return false;
     const text = (element.textContent || '').replace(/\s+/g, ' ').trim();
+    // 项目说明也会被链接拆分；验证已知结构后只修改直接文本节点。
+    if (/^Also includes (?:Global Permissions|全局权限) when working in this project\.(?: (?:Learn more\.|了解更多[。.]?))?$/.test(text)) {
+      const children = Array.from(element.childNodes);
+      const linkIndex = children.findIndex(child => child.nodeType === Node.ELEMENT_NODE &&
+        /^(?:Global Permissions|全局权限)$/.test((child.textContent || '').trim()));
+      const before = children.slice(0, linkIndex).filter(child => child.nodeType === Node.TEXT_NODE);
+      const after = children.slice(linkIndex + 1).filter(child => child.nodeType === Node.TEXT_NODE);
+      if (linkIndex < 0 || before.length === 0 || after.length === 0 ||
+          before.map(child => child.nodeValue).join('').trim() !== 'Also includes' ||
+          after.map(child => child.nodeValue).join('').replace(/\s+/g, ' ').trim() !== 'when working in this project.') return false;
+      for (const child of [...before, ...after]) {
+        child.nodeValue = child === before[0] ? '在此项目中工作时，还包括' : child === after[after.length - 1] ? '。' : '';
+        child.__zh_patched = true;
+      }
+      return true;
+    }
     const rule = composedSentences.find((item) => item.match.test(text));
     if (!rule) return false;
     for (const child of element.childNodes) {
