@@ -1824,6 +1824,16 @@
       ]),
     },
     {
+      match: /^Also includes (?:Global Permissions|全局权限) when working in this project\.(?: (?:Learn more\.|了解更多[。.]?))?$/,
+      nodes: new Map([
+        ['Also includes', '在此项目中工作时，还包括'],
+        ['when working', ''],
+        ['in this project', ''],
+        ['.', '。'],
+        ['when working in this project.', '。'],
+      ]),
+    },
+    {
       match: /^Select one of the (?:two|three) options\. Agent settings and permissions can be further customized below\./,
       nodes: new Map([
         ['Select one of the', '选择以下'],
@@ -1835,30 +1845,20 @@
   ];
 
   function translateComposedElement(element) {
-    // 两条组合句都至少需要 3 个文本节点；叶子元素直接跳过，避免读取整棵子树的 textContent。
+    // 组合句都至少需要 3 个文本节点；叶子元素直接跳过，避免读取整棵子树的 textContent。
     if (!element.childNodes || element.childNodes.length < 3) return false;
     const text = (element.textContent || '').replace(/\s+/g, ' ').trim();
-    // 项目说明也会被链接拆分；验证已知结构后只修改直接文本节点。
-    if (/^Also includes (?:Global Permissions|全局权限) when working in this project\.(?: (?:Learn more\.|了解更多[。.]?))?$/.test(text)) {
-      const children = Array.from(element.childNodes);
-      const linkIndex = children.findIndex(child => child.nodeType === Node.ELEMENT_NODE &&
-        /^(?:Global Permissions|全局权限)$/.test((child.textContent || '').trim()));
-      const before = children.slice(0, linkIndex).filter(child => child.nodeType === Node.TEXT_NODE);
-      const after = children.slice(linkIndex + 1).filter(child => child.nodeType === Node.TEXT_NODE);
-      if (linkIndex < 0 || before.length === 0 || after.length === 0 ||
-          before.map(child => child.nodeValue).join('').trim() !== 'Also includes' ||
-          after.map(child => child.nodeValue).join('').replace(/\s+/g, ' ').trim() !== 'when working in this project.') return false;
-      for (const child of [...before, ...after]) {
-        child.nodeValue = child === before[0] ? '在此项目中工作时，还包括' : child === after[after.length - 1] ? '。' : '';
-        child.__zh_patched = true;
-      }
-      return true;
-    }
     const rule = composedSentences.find((item) => item.match.test(text));
     if (!rule) return false;
     for (const child of element.childNodes) {
       if (child.nodeType !== Node.TEXT_NODE) continue;
       const key = (child.nodeValue || '').trim();
+      if (!key) {
+        // 中文句子不保留节点间空白
+        child.nodeValue = '';
+        child.__zh_patched = true;
+        continue;
+      }
       if (!rule.nodes.has(key)) continue;
       child.nodeValue = rule.nodes.get(key);
       child.__zh_patched = true;

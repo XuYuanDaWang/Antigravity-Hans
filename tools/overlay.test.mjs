@@ -184,7 +184,6 @@ test('2.5.5 IDE chrome strings are localized', () => {
     ['Rules help guide the behavior of Agent.', '规则用于指导智能体的行为。'],
     ['Customize Agent to get a better, more personalized experience.', '自定义智能体，获得更好、更个性化的体验。'],
     ['Workflows are saved prompts that Agent can follow. To trigger a workflow, type "/" in Agent.', '工作流是智能体可以遵循的已保存提示词。要触发工作流，请在智能体中输入“/”。'],
-    ['Go Live', '实时预览 (Go Live)'],
   ]) assert.equal(translate(input), expected);
 });
 

@@ -85,7 +85,7 @@ antigravity-hans --trust-external-overlay  # 显式信任同目录外部汉化�
 需要 **Go 1.27.3 或更高版本**（`go.mod` 已声明，旧工具链会自动下载对应版本）。
 
 ```bash
-./build.sh    # 交叉编译 macOS / Windows 三个平台到 dist/
+./build.sh    # 交叉编译 macOS / Windows 2个平台到 dist/
 ```
 ---
 
