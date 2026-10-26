@@ -411,6 +411,8 @@ test('2.26.0 normal app model availability tooltips are localized', () => {
 test('2.26.0 normal app notification and project deletion toasts are localized', () => {
   assert.equal(translate('Dismiss notification'), '关闭通知');
   assert.equal(translate('Project deleted'), '项目已删除');
+  assert.equal(translate('Select Environment'), '选择环境');
   assert.equal(translate('关闭通知'), '关闭通知');
   assert.equal(translate('项目已删除'), '项目已删除');
+  assert.equal(translate('选择环境'), '选择环境');
 });

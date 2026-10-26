@@ -730,6 +730,7 @@
     ['Add inline comment', '添加行内批注'],
     ['Plan Review Policy', '计划审核策略'],
     ['Agent Conversation', '智能体对话'],
+    ['Select Environment', '选择环境'],
     ['Local Permissions', '本地权限'],
     ['Selection Actions', '选择操作'],
     ['Proceed with Plan', '按计划继续'],
